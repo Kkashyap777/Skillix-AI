@@ -8,12 +8,95 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+
+import { body, param, validationResult } from 'express-validator';
+import morgan from 'morgan';
 
 dotenv.config();
 
 const app = express();
+
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
+app.use(helmet());
+
+if (process.env.NODE_ENV === 'production') {
+    app.use((req, res, next) => {
+        if (req.headers['x-forwarded-proto'] !== 'https') {
+            return res.redirect(`https://${req.get('Host')}${req.url}`);
+        }
+        next();
+    });
+}
+
+app.use(morgan(':remote-addr - :method :url :status :res[content-length] - :response-time ms'));
+
+// Custom alert logger
+const logAbuse = (req, message) => {
+    console.warn(`[SECURITY ALERT] ${message} | IP: ${req.ip} | URL: ${req.originalUrl}`);
+};
+
+const validateRequest = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        logAbuse(req, 'Payload Validation Failure (Possible Malformed Request)');
+        return res.status(400).json({ error: "Validation failed.", details: errors.array() });
+    }
+    next();
+};
+
+const apiLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, 
+    max: 100, 
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        logAbuse(req, 'API Global Rate Limit Breached');
+        res.status(429).json({ error: "Too many requests, please try again later." });
+    }
+});
+app.use('/api/', apiLimiter);
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 50, // Relaxed for testing
+    handler: (req, res) => {
+        logAbuse(req, 'Login Brute-Force Attempt Prevented');
+        res.status(429).json({ error: "Too many login attempts from this IP, please try again after 15 minutes." });
+    }
+});
+
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, 
+    max: 30, 
+    handler: (req, res) => {
+        logAbuse(req, 'Suspicious Account Generation Exceeded');
+        res.status(429).json({ error: "Too many accounts created from this IP, please try again after an hour." });
+    }
+});
+
+const aiLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, 
+    max: 50, // Relaxed for testing
+    handler: (req, res) => {
+        logAbuse(req, 'AI Generation Quota Maxed Out');
+        res.status(429).json({ error: "AI generation quota exceeded for your IP. Please try again after an hour." });
+    }
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    handler: (req, res) => {
+        logAbuse(req, 'General Auth Endpoint Flooded');
+        res.status(429).json({ error: "Too many requests from this IP, please try again after 15 minutes." });
+    }
+});
 
 // ==========================================
 // 1. DATABASE & MODELS
@@ -26,6 +109,8 @@ const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    isVerified: { type: Boolean, default: false },
+    verificationToken: { type: String },
     resetToken: { type: String },
     resetTokenExpiry: { type: Date }
 }, { timestamps: true });
@@ -40,39 +125,26 @@ const roadmapSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Roadmap = mongoose.model('Roadmap', roadmapSchema);
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error("CRITICAL FATAL ERROR: JWT_SECRET is not defined in environment variables.");
+    process.exit(1);
+}
+
+const requireAuth = (req, res, next) => {
+    const token = req.header('x-auth-token');
+    if (!token) return res.status(401).json({ error: "Access denied. No token provided." });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        res.status(400).json({ error: "Invalid token." });
+    }
+};
 
 // ==========================================
 // 2. AUTHENTICATION (Register & Login)
-// ==========================================
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password } = req.body;
-        const exists = await User.findOne({ email });
-        if (exists) return res.status(400).json({ error: "Used email." });
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        const newUser = new User({ name, email, password: hashedPassword });
-        await newUser.save();
-        const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: '30d' });
-        res.json({ token, user: { name: newUser.name, email: newUser.email } });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ error: "Invalid credentials." });
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
-        const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '30d' });
-        res.json({ token, user: { name: user.name, email: user.email } });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ==========================================
-// 3. SECURE FORGOT PASSWORD (Email Convo)
 // ==========================================
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -82,46 +154,159 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, 
+    body('name').trim().notEmpty().withMessage('Name is required').escape(),
+    body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    validateRequest,
+    async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        const exists = await User.findOne({ email });
+        if (exists) return res.status(400).json({ error: "Email already in use." });
+        
+        const salt = await bcrypt.genSalt(12);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        
+        const verificationToken = crypto.randomInt(100000, 1000000).toString();
+        const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
+        
+        const newUser = new User({ 
+            name, 
+            email, 
+            password: hashedPassword,
+            verificationToken: verificationTokenHash
+        });
+        await newUser.save();
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Skillix Account Verification Code',
+            text: `Your Skillix Account Verification Code is: ${verificationToken}`
+        });
+
+        res.json({ message: "Registration successful. Please check your email for the verification token." });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/verify-email', authLimiter, 
+    body('email').isEmail().normalizeEmail(),
+    body('verificationToken').isString().isLength({ min: 6, max: 6 }).isNumeric().withMessage("Invalid code format"),
+    validateRequest,
+    async (req, res) => {
+    try {
+        const { email, verificationToken } = req.body;
+        if (!email || !verificationToken) return res.status(400).json({ error: "Email and token required." });
+
+        const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+        const user = await User.findOne({ email, verificationToken: hashedToken });
+        
+        if (!user) return res.status(400).json({ error: "Invalid or already used verification token." });
+        
+        user.isVerified = true;
+        user.verificationToken = undefined;
+        await user.save();
+        
+        const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ message: "Email verified successfully.", token, user: { name: user.name, email: user.email } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/login', loginLimiter, 
+    body('email').isEmail().normalizeEmail(),
+    body('password').notEmpty().withMessage("Password is required"),
+    validateRequest,
+    async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ error: "Invalid credentials." });
+        
+        if (!user.isVerified) return res.status(403).json({ error: "Account not verified. Please check your email for the verification token." });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
+        
+        const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token, user: { name: user.name, email: user.email } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// 3. SECURE FORGOT PASSWORD (Email Convo)
+// ==========================================
+app.post('/api/auth/forgot-password', authLimiter, 
+    body('email').isEmail().normalizeEmail(),
+    validateRequest,
+    async (req, res) => {
     try {
         const { email } = req.body;
         const user = await User.findOne({ email });
         if (!user) return res.status(404).json({ error: "Not found." });
-        const token = Math.floor(100000 + Math.random() * 900000).toString();
-        user.resetToken = token;
-        user.resetTokenExpiry = Date.now() + 600000; // 10 mins
+        
+        const resetToken = crypto.randomInt(100000, 1000000).toString();
+        const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+        
+        user.resetToken = hashedResetToken;
+        user.resetTokenExpiry = Date.now() + 15 * 60 * 1000; // 15 mins
         await user.save();
+        
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: email,
-            subject: 'Skillix Password Recovery',
-            text: `Your reset code: ${token}`
+            subject: 'Skillix Password Recovery Code',
+            text: `Your password reset code is: ${resetToken}\nUse this 6-digit code to reset your password. It expires in 15 minutes.`
         });
-        res.json({ message: "Code sent." });
+        res.json({ message: "Reset token sent to email." });
     } catch (err) { 
         console.error("Email Error:", err);
         res.status(500).json({ error: "Email error." }); 
     }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authLimiter, 
+    body('email').isEmail().normalizeEmail(),
+    body('resetToken').isString().isLength({ min: 6, max: 6 }).isNumeric(),
+    body('newPassword').isLength({ min: 6 }),
+    validateRequest,
+    async (req, res) => {
     try {
         const { email, resetToken, newPassword } = req.body;
-        const user = await User.findOne({ email, resetToken, resetTokenExpiry: { $gt: Date.now() } });
-        if (!user) return res.status(400).json({ error: "Invalid/Expired." });
-        const salt = await bcrypt.genSalt(10);
+        const hashedResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+        
+        const user = await User.findOne({ 
+            email, 
+            resetToken: hashedResetToken, 
+            resetTokenExpiry: { $gt: Date.now() } 
+        });
+        
+        if (!user) return res.status(400).json({ error: "Invalid or expired reset token." });
+        
+        const salt = await bcrypt.genSalt(12);
         user.password = await bcrypt.hash(newPassword, salt);
         user.resetToken = undefined;
         user.resetTokenExpiry = undefined;
         await user.save();
-        res.json({ message: "Success!" });
+        
+        res.json({ message: "Password reset successfully!" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ==========================================
 // 4. AI & ROADMAPS
 // ==========================================
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error("Unsafe or invalid file type. Only PDFs are permitted."), false);
+        }
+    }
+});
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const roleKeywordMap = {
@@ -152,7 +337,18 @@ const computeATSScore = (resumeText, role, verifiedSkills = [], missingSkills = 
     return Math.max(10, Math.min(100, rawScore));
 };
 
-app.post('/api/analyze', upload.single('resume'), async (req, res) => {
+const uploadHandler = (req, res, next) => {
+    upload.single('resume')(req, res, (err) => {
+        if (err) return res.status(400).json({ error: err.message });
+        next();
+    });
+};
+
+app.post('/api/analyze', aiLimiter, uploadHandler, 
+    body('role').trim().notEmpty().escape(),
+    body('timeline').trim().notEmpty().escape(),
+    validateRequest,
+    async (req, res) => {
     try {
         const { role, timeline } = req.body;
         if (!req.file) return res.status(400).json({ error: 'Resume file is required.' });
@@ -200,29 +396,32 @@ app.post('/api/analyze', upload.single('resume'), async (req, res) => {
     }
 });
 
-app.get('/api/auth/profile', async (req, res) => {
+app.get('/api/auth/profile', requireAuth, async (req, res) => {
     try {
-        const token = req.header('x-auth-token');
-        if (!token) return res.status(401).json({ error: "No token." });
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.id).select('-password');
+        const user = await User.findById(req.user.id).select('-password');
+        if (!user) return res.status(404).json({ error: "User not found." });
         res.json(user);
-    } catch (err) { res.status(401).json({ error: "Invalid token." }); }
+    } catch (err) { res.status(500).json({ error: "Server error." }); }
 });
 
-app.get('/api/roadmaps/me', async (req, res) => {
+app.get('/api/roadmaps/me', requireAuth, async (req, res) => {
     try {
-        const token = req.header('x-auth-token');
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const rms = await Roadmap.find({ userId: decoded.id }).sort('-createdAt');
+        const rms = await Roadmap.find({ userId: req.user.id }).sort('-createdAt');
         res.json(rms);
-    } catch (err) { res.status(500).json({ error: "Auth failed." }); }
+    } catch (err) { res.status(500).json({ error: "Server error." }); }
 });
 
-app.patch('/api/roadmaps/:id/tasks', async (req, res) => {
+app.patch('/api/roadmaps/:id/tasks', requireAuth, 
+    param('id').isMongoId().withMessage('Invalid roadmap ID'),
+    body('checkedTasks').isObject().withMessage('checkedTasks must be an object'),
+    validateRequest,
+    async (req, res) => {
     try {
         const { checkedTasks } = req.body;
-        const roadmap = await Roadmap.findById(req.params.id);
+        const roadmap = await Roadmap.findOne({ _id: req.params.id, userId: req.user.id });
+        
+        if (!roadmap) return res.status(404).json({ error: "Roadmap not found or unauthorized access." });
+        
         roadmap.checkedTasks = checkedTasks;
         await roadmap.save();
         res.json({ message: "Cloud Synced!" });
@@ -231,3 +430,14 @@ app.patch('/api/roadmaps/:id/tasks', async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Port ${PORT}`));
+
+import fs from 'fs';
+app.use((err, req, res, next) => {
+    fs.writeFileSync('express_error.txt', String(err.stack));
+    // Do not res.send if headers are already sent
+    if (!res.headersSent) {
+        res.status(500).json({error: "Server encountered an error", msg: err.message});
+    } else {
+        next(err);
+    }
+});

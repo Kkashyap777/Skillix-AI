@@ -94,11 +94,13 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [selectedRoadmap, setSelectedRoadmap] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [sessionMountTime, setSessionMountTime] = useState(0);
 
   // Dark mode only - no persistence needed
 
   useEffect(() => {
     if (token) {
+      setSessionMountTime(Date.now());
       axios.get(`${API_URL}/auth/profile`, { headers: { 'x-auth-token': token } })
         .then(res => setUser(res.data))
         .catch(() => logout());
@@ -125,7 +127,12 @@ export default function App() {
              currentView={currentView} 
              setCurrentView={setCurrentView} 
              setSelectedRoadmap={setSelectedRoadmap}
-             logout={() => setLogoutDialogOpen(true)} 
+             onSignOffRequest={(e) => {
+                 if (e) { e.preventDefault(); e.stopPropagation(); }
+                 // STRICT LOCK: Prevent any ghost clicks or extensions from opening dialog in first 1.5s
+                 if (Date.now() - sessionMountTime < 1500) return;
+                 setLogoutDialogOpen(true);
+             }} 
              user={user} 
           />
           <Container maxWidth="lg" sx={{ py: 6, flexGrow: 1 }}>
@@ -153,7 +160,7 @@ export default function App() {
 // ==========================================
 // NAVBAR COMPONENT
 // ==========================================
-function Navbar({ currentView, setCurrentView, setSelectedRoadmap, logout, user }) {
+function Navbar({ currentView, setCurrentView, setSelectedRoadmap, onSignOffRequest, user }) {
   return (
     <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
       <Container maxWidth="lg">
@@ -197,7 +204,7 @@ function Navbar({ currentView, setCurrentView, setSelectedRoadmap, logout, user 
                </Box>
             </Box>
 
-            <IconButton onClick={logout} color="error"><LogOut size={20}/></IconButton>
+            <IconButton onClick={onSignOffRequest} color="error"><LogOut size={20}/></IconButton>
           </Box>
         </Toolbar>
       </Container>
@@ -663,10 +670,18 @@ function AuthScreen({ setToken, setCurrentView }) {
                 const res = await axios.post(`${API_URL}/auth/reset-password`, { email, resetToken, newPassword });
                 toast.success(res.data.message);
                 setAuthMode('login');
+            } else if (authMode === 'verify') {
+                const res = await axios.post(`${API_URL}/auth/verify-email`, { email, verificationToken: resetToken });
+                localStorage.setItem('token', res.data.token);
+                setToken(res.data.token);
+                setCurrentView('dashboard');
+                toast.success("Account Verified!");
+            } else if (authMode === 'signup') {
+                const res = await axios.post(`${API_URL}/auth/register`, { name, email, password });
+                toast.success(res.data.message);
+                setAuthMode('verify');
             } else {
-                const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-                const payload = authMode === 'login' ? { email, password } : { name, email, password };
-                const res = await axios.post(`${API_URL}${endpoint}`, payload);
+                const res = await axios.post(`${API_URL}/auth/login`, { email, password });
                 localStorage.setItem('token', res.data.token);
                 setToken(res.data.token);
                 setCurrentView('dashboard');
@@ -717,6 +732,17 @@ function AuthScreen({ setToken, setCurrentView }) {
                                     }}
                                 />
                             </>
+                        )}
+
+                        {authMode === 'verify' && (
+                            <TextField 
+                                label="6-Digit Verification Code" 
+                                fullWidth 
+                                variant="filled" 
+                                value={resetToken} 
+                                onChange={e=>setResetToken(e.target.value)} 
+                                required 
+                            />
                         )}
 
                         <Button variant="contained" type="submit" fullWidth size="large" sx={{ height: 50 }} disabled={loading}>
