@@ -658,6 +658,19 @@ function AuthScreen({ setToken, setCurrentView }) {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    const handleResend = async () => {
+        if (!email) return toast.error("Enter your email first.");
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_URL}/auth/resend-verification`, { email });
+            toast.success(res.data.message);
+        } catch (err) {
+            toast.error(err.response?.data?.error || "Failed to resend code.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -688,7 +701,11 @@ function AuthScreen({ setToken, setCurrentView }) {
                 toast.success("Login Successful.");
             }
         } catch (err) {
-            toast.error(err.response?.data?.error || "Auth Sync Failed.");
+            const errorMsg = err.response?.data?.error || "Auth Sync Failed.";
+            toast.error(errorMsg);
+            if (errorMsg.toLowerCase().includes("not verified")) {
+                setAuthMode('verify');
+            }
         } finally {
             setLoading(false);
         }
@@ -748,6 +765,12 @@ function AuthScreen({ setToken, setCurrentView }) {
                         <Button variant="contained" type="submit" fullWidth size="large" sx={{ height: 50 }} disabled={loading}>
                             {loading ? <CircularProgress size={24} color="inherit" /> : authMode.toUpperCase()}
                         </Button>
+
+                        {(authMode === 'verify') && (
+                            <Button variant="outlined" onClick={handleResend} fullWidth disabled={loading}>
+                                Resend Verification Code
+                            </Button>
+                        )}
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Button size="small" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>{authMode === 'login' ? 'REGISTER' : 'GO TO LOGIN'}</Button>

@@ -213,6 +213,34 @@ app.post('/api/auth/verify-email', authLimiter,
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/auth/resend-verification', authLimiter, 
+    body('email').isEmail().normalizeEmail(),
+    validateRequest,
+    async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ error: "User not found." });
+        
+        if (user.isVerified) return res.status(400).json({ error: "Account already verified." });
+        
+        const verificationToken = crypto.randomInt(100000, 1000000).toString();
+        const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
+        
+        user.verificationToken = verificationTokenHash;
+        await user.save();
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Skillix Account Verification Code',
+            text: `Your Skillix Account Verification Code is: ${verificationToken}`
+        });
+
+        res.json({ message: "Verification code resent. Please check your email." });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/auth/login', loginLimiter, 
     body('email').isEmail().normalizeEmail(),
     body('password').notEmpty().withMessage("Password is required"),
@@ -285,6 +313,7 @@ app.post('/api/auth/reset-password', authLimiter,
         
         const salt = await bcrypt.genSalt(12);
         user.password = await bcrypt.hash(newPassword, salt);
+        user.isVerified = true; // Automatically verify if they reset via email
         user.resetToken = undefined;
         user.resetTokenExpiry = undefined;
         await user.save();
