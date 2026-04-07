@@ -1,1 +1,1 @@
-# SkillixAI
+SkillixAI
