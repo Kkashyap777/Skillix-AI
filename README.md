@@ -6,7 +6,7 @@ Skillix AI is a full-stack web application designed to help students and self-le
 
 ---
 
-## 🚀 Key Features
+##  Key Features
 
 - **AI Roadmap Generation:** Leverages Google's Gemini AI to create detailed, hierarchical learning paths for any topic.
 - **Instant Access:** Includes a **Guest Login** feature for recruiters and guests to try the app instantly.
@@ -16,7 +16,7 @@ Skillix AI is a full-stack web application designed to help students and self-le
 
 ---
 
-## 🛠️ The Tech Stack
+##  The Tech Stack
 
 - **Frontend:** React.js (Vite), Material UI, Framer Motion
 - **Backend:** Node.js, Express.js
@@ -26,7 +26,7 @@ Skillix AI is a full-stack web application designed to help students and self-le
 
 ---
 
-## 👨‍💻 Developed By
+##  Developed By
 
 This project was built as a collaborative effort to solve a real learning problem.
 
