@@ -61,6 +61,26 @@ Skillix AI is an enterprise-grade, full-stack web application designed to help s
 - **Authentication:** `jsonwebtoken`, `bcryptjs`, Node `crypto`
 - **Protection:** `helmet`, `express-rate-limit`, `express-validator`, `express-mongo-sanitize`
 
+## 📦 Project Structure
+
+```text
+skillix-ai/
+├── backend/                  # Secure Express server and APIs
+│   ├── server.js             # Core server logic, security middlewares, and AI integration
+│   ├── package.json
+│   └── .env                  # Environment variables (Ignored in Git)
+├── frontend/                 # React application
+│   ├── public/
+│   ├── src/
+│   │   ├── App.jsx           # Main UI, Auth Flows, Dashboard, and Generator
+│   │   ├── App.css
+│   │   └── main.jsx
+│   ├── package.json
+│   └── vite.config.js
+├── README.md
+└── .gitignore                # Root gitignore rules ensuring security
+```
+
 ## 🚦 API Endpoints
 
 **Authentication API**
