@@ -106,5 +106,5 @@ This project was built as a collaborative effort to solve a real learning proble
 - **Krinjal Kashyap** ([@Kkashyap777](https://github.com/Kkashyap777))
 - **Tonmoy Thakuria** ([@TonmoyThakuria018](https://github.com/TonmoyThakuria018))
 
-## 📄 License
+##  License
 Proprietary - All Rights Reserved.
