@@ -2,9 +2,9 @@
 
 Skillix AI is an enterprise-grade, full-stack web application designed to help students, self-learners, and professionals navigate the overwhelming world of information. Most learners get stuck wondering where to start; Skillix AI solves this by analyzing resumes, calculating ATS efficiency, and generating structured, step-by-step learning paths in seconds using AI.
 
-**🌐 Live Demo:** [https://skillix-ai.vercel.app/](https://skillix-ai.vercel.app/)
+** Live Demo:** [https://skillix-ai.vercel.app/](https://skillix-ai.vercel.app/)
 
-## 🎯 Key Features
+##  Key Features
 
 - **Resume-to-Roadmap Scan:** Deep parsing of PDF resumes to extract existing skill sets and identify skill gaps for specific target roles.
 - **AI Roadmap Generation:** Leverages Google's Gemini AI to create detailed, hierarchical, and phase-based learning paths tailored to selected timelines (e.g., 4 Weeks to 12 Months).
@@ -15,7 +15,7 @@ Skillix AI is an enterprise-grade, full-stack web application designed to help s
 - **Responsive UI:** Built with React, Vite, and Material UI for a polished, mobile-friendly experience with a Custom Industrial Modern Dark Theme.
 - **Enterprise Security:** Advanced protection including rate limiting, payload validation (`express-validator`), and encrypted tokens.
 
-## 🏗️ Architecture
+##  Architecture
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ Skillix AI is an enterprise-grade, full-stack web application designed to help s
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 The Tech Stack
+##  The Tech Stack
 
 **Frontend**
 - **Framework:** React.js (Vite)
@@ -61,7 +61,7 @@ Skillix AI is an enterprise-grade, full-stack web application designed to help s
 - **Authentication:** `jsonwebtoken`, `bcryptjs`, Node `crypto`
 - **Protection:** `helmet`, `express-rate-limit`, `express-validator`, `express-mongo-sanitize`
 
-## 📦 Project Structure
+##  Project Structure
 
 ```text
 skillix-ai/
@@ -81,7 +81,7 @@ skillix-ai/
 └── .gitignore                # Root gitignore rules ensuring security
 ```
 
-## 🚦 API Endpoints
+##  API Endpoints
 
 **Authentication API**
 - `POST /api/auth/register` - Register a new user & dispatch verification email
@@ -98,77 +98,13 @@ skillix-ai/
 - `GET /api/roadmaps/me` - Fetch saved roadmaps for the logged-in user
 - `PATCH /api/roadmaps/:id/tasks` - Sync task completion progress to the cloud
 
-## 🔄 Getting Started
 
-### Prerequisites
-- Node.js (v18+)
-- MongoDB Atlas Account
-- Google Gemini API Key
-- Resend API Key
-
-### Quick Start
-
-1. **Clone repository**
-```bash
-git clone https://github.com/Kkashyap777/Skillix-AI.git
-cd skillix-ai
-```
-
-2. **Backend Setup**
-```bash
-cd backend
-npm install
-```
-*Create a `.env` file in the `backend` directory:*
-```env
-PORT=5000
-MONGO_URI=your_mongodb_connection_string
-GEMINI_API_KEY=your_gemini_api_key
-RESEND_API_KEY=your_resend_api_key
-JWT_SECRET=your_highly_secure_random_string
-```
-
-3. **Frontend Setup**
-```bash
-cd ../frontend
-npm install
-```
-*Create a `.env` file in the `frontend` directory:*
-```env
-VITE_API_URL=http://localhost:5000/api
-```
-
-4. **Run the Application**
-*(Open two terminal windows)*
-
-Terminal 1 (Backend):
-```bash
-cd backend
-npm run dev
-```
-
-Terminal 2 (Frontend):
-```bash
-cd frontend
-npm run dev
-```
-
-**Access the application at:** `http://localhost:5173`
-
-***
-
-## 👨‍💻 Developed By
+##  Developed By
 
 This project was built as a collaborative effort to solve a real learning problem.
 
 - **Krinjal Kashyap** ([@Kkashyap777](https://github.com/Kkashyap777))
 - **Tonmoy Thakuria** ([@TonmoyThakuria018](https://github.com/TonmoyThakuria018))
-
-## 🤝 Contributing
-1. Create a feature branch: `git checkout -b feature/your-feature`
-2. Commit your changes: `git commit -am 'Add new feature'`
-3. Push to the branch: `git push origin feature/your-feature`
-4. Submit a pull request.
 
 ## 📄 License
 Proprietary - All Rights Reserved.
