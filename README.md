@@ -188,7 +188,7 @@ The following endpoints describe the application's authentication, resume analys
 Skillix AI was developed collaboratively.
 
 - **Krinjal Kashyap** — [GitHub Profile](https://github.com/Kkashyap777)
-- **Tonmoy Thakuria** — [GitHub Profile](https://github.com/TonmoyThakur ia018)
+- **Tonmoy Thakuria** — [GitHub Profile](https://github.com/TonmoyThakuria018)
 
 ---
 
