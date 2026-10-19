@@ -6,6 +6,8 @@ The platform uses Google's Gemini API to turn resume information and learning go
 
 **Live Demo:** [Explore Skillix AI](https://skillix-ai.vercel.app/)
 
+> **Note for Interviewers and Demo Users:** Skillix AI currently supports access through the **Continue as Guest** option. New-user registration and email verification are not currently available in the public demo because production email verification has not yet been configured. Therefore, please select **Continue as Guest** to explore the application's available features without registering or verifying an email address. This guest access is provided so interviewers, recruiters, and other visitors can try the application and evaluate its functionality. Registration and email verification may be enabled in a future update.
+
 ---
 
 ## Features
@@ -186,7 +188,7 @@ The following endpoints describe the application's authentication, resume analys
 Skillix AI was developed collaboratively.
 
 - **Krinjal Kashyap** — [GitHub Profile](https://github.com/Kkashyap777)
-- **Tonmoy Thakuria** — [GitHub Profile](https://github.com/TonmoyThakuria018)
+- **Tonmoy Thakuria** — [GitHub Profile](https://github.com/TonmoyThakur ia018)
 
 ---
 
